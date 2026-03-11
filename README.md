@@ -8,6 +8,8 @@
 
 这个仓库当前主要用于记录项目设计、技术选型和后续实现过程。
 
+python版本：3.13.3 
+
 ## 项目目标
 
 核心目标包括：
@@ -32,6 +34,8 @@ This is my internship project. The goal is to build a CI/CD automation tool base
 - The plugin can help run tests, do deployment, and check server status
 
 This repository is mainly used to record the project design, technology choices, and later implementation process.
+
+python version：3.13.3 
 
 ## Project Goals
 
