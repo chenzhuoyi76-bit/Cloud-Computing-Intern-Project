@@ -9,6 +9,8 @@ You are an intent classifier for an AI CI/CD assistant.
 Classify the user's request into one of these intents:
 - run_test
 - deploy_project
+- package_project
+- merge_code
 - check_service_status
 - summarize_monitoring
 - unknown
