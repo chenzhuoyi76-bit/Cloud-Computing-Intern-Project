@@ -2,6 +2,7 @@ from flask import Flask
 
 from backend.routes.dispatch import dispatch_bp
 from backend.routes.llm import llm_bp
+from backend.routes.tasks import tasks_bp
 
 
 def create_app() -> Flask:
@@ -10,6 +11,7 @@ def create_app() -> Flask:
     app.json.ensure_ascii = False
     app.register_blueprint(llm_bp)
     app.register_blueprint(dispatch_bp)
+    app.register_blueprint(tasks_bp)
 
     @app.get("/health")
     def health_check():

@@ -8,6 +8,7 @@ class LlmApiTestCase(unittest.TestCase):
     def setUp(self):
         app.config["TESTING"] = True
         app.config["OPENAI_API_KEY"] = "test-key"
+        app.config["TASK_WORKSPACE_ROOT"] = "runtime/workspaces-test"
         self.client = app.test_client()
 
     def test_missing_user_input_returns_400(self):
@@ -91,6 +92,133 @@ class LlmApiTestCase(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["dispatch_result"]["task"], "run_unit_tests")
         self.assertEqual(body["dispatch_result"]["status"], "ready")
+
+    def test_prepare_task_rejects_invalid_payload(self):
+        response = self.client.post("/api/tasks/prepare", json={"intent": "deploy_project"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("project must be an object", response.get_json()["error"])
+
+    @patch("backend.routes.tasks.prepare_repository")
+    def test_prepare_task_success(self, mock_prepare_repository):
+        mock_prepare_repository.return_value = {
+            "workspace_path": "runtime/workspaces-test/task_123",
+            "repo_path": "runtime/workspaces-test/task_123/demo",
+            "repo_name": "demo",
+            "repo_url": "https://github.com/example/demo.git",
+            "branch": "main",
+            "checked_out_ref": "main",
+        }
+
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "docker",
+                    "docker": {}
+                }
+            }
+        }
+
+        response = self.client.post("/api/tasks/prepare", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["status"], "ready")
+        self.assertEqual(body["repository"]["repo_name"], "demo")
+        self.assertEqual(body["task_request"]["project"]["branch"], "main")
+
+    @patch("backend.routes.tasks.execute_task_pipeline")
+    def test_execute_task_ready_when_tests_pass(self, mock_execute_task_pipeline):
+        mock_execute_task_pipeline.return_value = {
+            "status": "ready",
+            "message": "任务执行完成，可以进入下一阶段。",
+            "repository": {
+                "repo_path": "runtime/workspaces-test/task_123/demo"
+            },
+            "install_result": {
+                "status": "passed"
+            },
+            "test_result": {
+                "status": "passed"
+            },
+            "dispatch_result": {
+                "status": "ready",
+                "blocked": False,
+                "task": "deploy_project"
+            },
+        }
+
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "docker",
+                    "docker": {}
+                }
+            }
+        }
+
+        response = self.client.post("/api/tasks/execute", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["status"], "ready")
+        self.assertEqual(body["dispatch_result"]["status"], "ready")
+
+    @patch("backend.routes.tasks.execute_task_pipeline")
+    def test_execute_task_blocked_when_tests_fail(self, mock_execute_task_pipeline):
+        mock_execute_task_pipeline.return_value = {
+            "status": "blocked",
+            "message": "单元测试未通过，已触发质量门禁。",
+            "repository": {
+                "repo_path": "runtime/workspaces-test/task_123/demo"
+            },
+            "install_result": {
+                "status": "passed"
+            },
+            "test_result": {
+                "status": "failed",
+                "returncode": 1
+            },
+            "dispatch_result": {
+                "status": "blocked",
+                "blocked": True,
+                "blocking_reason": "unit_tests_not_passed"
+            },
+        }
+
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "docker",
+                    "docker": {}
+                }
+            }
+        }
+
+        response = self.client.post("/api/tasks/execute", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["status"], "blocked")
+        self.assertEqual(body["dispatch_result"]["blocking_reason"], "unit_tests_not_passed")
 
 
 if __name__ == "__main__":
