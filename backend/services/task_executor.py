@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any
 
+from backend.services.deployer_factory import get_deployer
+from backend.services.deployers.base import DeploymentError, UnsupportedDeployTargetError
 from backend.services.repo_fetcher import prepare_repository
 from backend.services.task_dispatcher import dispatch_task
 from backend.services.test_runner_factory import get_test_runner
@@ -15,6 +17,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
 
     install_result = None
     test_result = None
+    deploy_result = None
 
     try:
         runner = get_test_runner(project["project_type"])
@@ -39,6 +42,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
             "repository": repository,
             "install_result": install_result,
             "test_result": test_result,
+            "deploy_result": deploy_result,
             "dispatch_result": dispatch_task(
                 intent_result={"intent": task_request["intent"]},
                 context={"unit_tests_passed": False},
@@ -57,16 +61,36 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
     if test_result and test_result["status"] == "failed":
         overall_status = "blocked"
 
+    if overall_status == "ready" and execution["deploy"]["enabled"]:
+        try:
+            deployer = get_deployer(execution["deploy"]["target"])
+            deploy_result = deployer.deploy(
+                repo_path=repo_path,
+                deploy_config=execution["deploy"],
+                project=project,
+            )
+            overall_status = "deployed"
+        except (UnsupportedDeployTargetError, DeploymentError) as exc:
+            overall_status = "failed"
+            deploy_result = {
+                "step": "deploy",
+                "target": execution["deploy"]["target"],
+                "status": "failed",
+                "error": str(exc),
+            }
+
     return {
         "status": overall_status,
         "message": _build_message(
             install_result=install_result,
             test_result=test_result,
+            deploy_result=deploy_result,
             dispatch_result=dispatch_result,
         ),
         "repository": repository,
         "install_result": install_result,
         "test_result": test_result,
+        "deploy_result": deploy_result,
         "dispatch_result": dispatch_result,
     }
 
@@ -74,6 +98,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
 def _build_message(
     install_result: dict[str, Any] | None,
     test_result: dict[str, Any] | None,
+    deploy_result: dict[str, Any] | None,
     dispatch_result: dict[str, Any],
 ) -> str:
     if install_result and install_result["status"] == "failed":
@@ -82,4 +107,8 @@ def _build_message(
         return "单元测试未通过，已触发质量门禁。"
     if dispatch_result.get("blocked"):
         return "流程被质量门禁阻塞。"
+    if deploy_result and deploy_result.get("status") == "failed":
+        return "部署执行失败。"
+    if deploy_result and deploy_result.get("status") == "passed":
+        return "任务执行完成，部署已成功。"
     return "任务执行完成，可以进入下一阶段。"

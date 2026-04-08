@@ -136,8 +136,8 @@ class LlmApiTestCase(unittest.TestCase):
     @patch("backend.routes.tasks.execute_task_pipeline")
     def test_execute_task_ready_when_tests_pass(self, mock_execute_task_pipeline):
         mock_execute_task_pipeline.return_value = {
-            "status": "ready",
-            "message": "任务执行完成，可以进入下一阶段。",
+            "status": "deployed",
+            "message": "任务执行完成，部署已成功。",
             "repository": {
                 "repo_path": "runtime/workspaces-test/task_123/demo"
             },
@@ -146,6 +146,10 @@ class LlmApiTestCase(unittest.TestCase):
             },
             "test_result": {
                 "status": "passed"
+            },
+            "deploy_result": {
+                "status": "passed",
+                "target": "docker"
             },
             "dispatch_result": {
                 "status": "ready",
@@ -173,8 +177,8 @@ class LlmApiTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
-        self.assertEqual(body["status"], "ready")
-        self.assertEqual(body["dispatch_result"]["status"], "ready")
+        self.assertEqual(body["status"], "deployed")
+        self.assertEqual(body["deploy_result"]["status"], "passed")
 
     @patch("backend.routes.tasks.execute_task_pipeline")
     def test_execute_task_blocked_when_tests_fail(self, mock_execute_task_pipeline):
@@ -191,6 +195,7 @@ class LlmApiTestCase(unittest.TestCase):
                 "status": "failed",
                 "returncode": 1
             },
+            "deploy_result": None,
             "dispatch_result": {
                 "status": "blocked",
                 "blocked": True,

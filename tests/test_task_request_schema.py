@@ -24,7 +24,7 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
 
         self.assertEqual(validated["project"]["branch"], "main")
         self.assertEqual(validated["execution"]["install"]["command"], "pip install -r requirements.txt")
-        self.assertEqual(validated["execution"]["test"]["command"], "pytest")
+        self.assertEqual(validated["execution"]["test"]["command"], "python -m pytest")
         self.assertEqual(validated["execution"]["deploy"]["docker"]["image_name"], "demo")
         self.assertTrue(validated["quality_gate"]["unit_tests_required"])
 

@@ -226,7 +226,7 @@ def _default_test_framework(project_type: str) -> str:
 
 
 def _default_test_command(project_type: str) -> str:
-    mapping = {"python": "pytest", "nodejs": "npm test", "java": "mvn test"}
+    mapping = {"python": "python -m pytest", "nodejs": "npm test", "java": "mvn test"}
     return mapping.get(project_type, "")
 
 
@@ -235,3 +235,4 @@ def _repo_name_from_url(repo_url: str) -> str:
     if repo_name.endswith(".git"):
         repo_name = repo_name[:-4]
     return repo_name or "app"
+
