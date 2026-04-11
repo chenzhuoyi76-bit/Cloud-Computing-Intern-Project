@@ -28,6 +28,31 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
         self.assertEqual(validated["execution"]["deploy"]["docker"]["image_name"], "demo")
         self.assertTrue(validated["quality_gate"]["unit_tests_required"])
 
+    def test_normalize_docker_names_to_lowercase(self):
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "docker",
+                    "docker": {
+                        "image_name": "DemoIDE",
+                        "image_tag": "latest",
+                        "container_name": "Demo IDE",
+                    }
+                }
+            }
+        }
+
+        validated = validate_task_request(payload)
+
+        self.assertEqual(validated["execution"]["deploy"]["docker"]["image_name"], "demoide")
+        self.assertEqual(validated["execution"]["deploy"]["docker"]["container_name"], "demo-ide")
+
     def test_reject_missing_repo_url(self):
         payload = {
             "intent": "deploy_project",

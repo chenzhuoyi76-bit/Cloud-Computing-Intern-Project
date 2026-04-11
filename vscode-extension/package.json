@@ -11,7 +11,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:cloudCicdAssistant.askIntent"
+    "onCommand:cloudCicdAssistant.askIntent",
+    "onCommand:cloudCicdAssistant.executeTask"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -19,15 +20,24 @@
       {
         "command": "cloudCicdAssistant.askIntent",
         "title": "Cloud CI/CD: Ask Assistant"
+      },
+      {
+        "command": "cloudCicdAssistant.executeTask",
+        "title": "Cloud CI/CD: Execute Task"
       }
     ],
     "configuration": {
       "title": "Cloud CI/CD Assistant",
       "properties": {
-        "cloudCicdAssistant.apiUrl": {
+        "cloudCicdAssistant.intentApiUrl": {
           "type": "string",
           "default": "http://127.0.0.1:5000/api/llm/intent",
           "description": "Backend API URL for intent recognition."
+        },
+        "cloudCicdAssistant.executeApiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5000/api/tasks/execute",
+          "description": "Backend API URL for task execution."
         }
       }
     }

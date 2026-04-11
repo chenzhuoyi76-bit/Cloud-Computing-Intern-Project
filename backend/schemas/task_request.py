@@ -107,6 +107,8 @@ def validate_task_request(payload: dict[str, Any] | None) -> dict[str, Any]:
             docker.setdefault("container_name", docker["image_name"])
             docker.setdefault("ports", [])
             docker.setdefault("env", {})
+            docker["image_name"] = _normalize_docker_name(docker["image_name"])
+            docker["container_name"] = _normalize_docker_name(docker["container_name"])
             _require_non_empty_string(docker, "dockerfile_path", prefix="execution.deploy.docker")
             _require_non_empty_string(docker, "image_name", prefix="execution.deploy.docker")
             _require_non_empty_string(docker, "image_tag", prefix="execution.deploy.docker")
@@ -234,5 +236,10 @@ def _repo_name_from_url(repo_url: str) -> str:
     repo_name = repo_url.rstrip("/").split("/")[-1]
     if repo_name.endswith(".git"):
         repo_name = repo_name[:-4]
-    return repo_name or "app"
+    return _normalize_docker_name(repo_name or "app")
 
+
+def _normalize_docker_name(value: str) -> str:
+    normalized = "".join(char.lower() if char.isalnum() or char in "._-" else "-" for char in value)
+    normalized = normalized.strip("._-")
+    return normalized or "app"
