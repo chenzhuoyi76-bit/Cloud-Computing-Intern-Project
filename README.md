@@ -1,52 +1,165 @@
 ## 项目简介
 
-这是我的实习项目，目标是做一个基于大模型的 CI/CD 自动化工具。
+这是我的实习项目，目标是做一个基于大模型的本地 AI CI/CD 原型工具。
 
-- 以 IDE 插件的形式使用
-- 用户在插件中输入命令或自然语言
-- 插件可以帮助完成测试、部署、服务器状态查看等操作
+当前形态是：
+- 一个最小可用的 VS Code 插件
+- 一个本地运行的 Flask 后端
+- 后端负责意图识别、任务分发、代码拉取、测试执行和基础部署
 
-这个仓库当前主要用于记录项目设计、技术选型和后续实现过程。
+目前项目重点是先在本机上跑通完整链路，再逐步扩展到更多语言、更多部署目标和更完整的产品形态。
 
-python版本：3.13.3 
+Python 版本：3.13.3
 
-## 项目目标
+## 当前已完成
 
-核心目标包括：
+目前已经打通了下面这条最小闭环：
 
-- 支持触发指定代码仓库的单元测试
-- 支持执行基础部署流程
-- 支持查看线上服务器运行情况
-- 支持对监控结果进行汇总展示
-- 尝试接入大模型，实现更自然的交互方式
+1. 用户通过 VS Code 插件或 HTTP 接口发起任务
+2. 后端调用 OpenAI 做意图识别
+3. 后端进行任务分发和质量门禁判断
+4. 拉取目标 GitHub 仓库到本地工作目录
+5. 针对 Python 项目安装依赖并执行 `python -m pytest`
+6. 单元测试通过后执行 Docker 部署
+7. 返回完整执行结果
 
+已经验证通过的能力包括：
+- Flask 后端 API
+- VS Code 最小插件交互
+- 意图识别接口 `/api/llm/intent`
+- 分发和卡点接口 `/api/llm/dispatch`
+- 统一执行接口 `/api/tasks/execute`
+- Python `pytest` 执行器
+- Docker 部署器
 
-## 说明
+## 当前项目结构
 
-这个项目目前更偏向实习阶段的学习和原型实践。后续在功能实现过程中，我会继续补充更具体的技术方案和开发进度。
+```text
+backend/
+  routes/
+  schemas/
+  services/
+tests/
+vscode-extension/
+docs/
+app.py
+requirements.txt
+```
 
-## Project Introduction
+关键模块说明：
+- `backend/routes/llm.py`：意图识别接口
+- `backend/routes/dispatch.py`：任务分发与质量门禁接口
+- `backend/routes/tasks.py`：统一任务准备与执行接口
+- `backend/schemas/task_request.py`：结构化任务请求校验
+- `backend/services/repo_fetcher.py`：代码拉取器
+- `backend/services/task_executor.py`：统一执行流水线
+- `backend/services/test_runners/`：测试执行适配层
+- `backend/services/deployers/`：部署执行适配层
+- `vscode-extension/`：最小 VS Code 插件
 
-This is my internship project. The goal is to build a CI/CD automation tool based on a large language model.
+## 本地运行
 
-- Use it as an IDE plugin
-- Users can type commands or natural language in the plugin
-- The plugin can help run tests, do deployment, and check server status
+### 1. 安装依赖
 
-This repository is mainly used to record the project design, technology choices, and later implementation process.
+建议先进入虚拟环境。
 
-python version：3.13.3 
+`cmd`：
+```cmd
+venv\Scripts\activate.bat
+```
 
-## Project Goals
+PowerShell：
+```powershell
+.\venv\Scripts\Activate.ps1
+```
 
-The main goals include:
+安装依赖：
+```cmd
+pip install -r requirements.txt
+```
 
-- Support running unit tests for a given code repository
-- Support basic deployment tasks
-- Support checking online server status
-- Support showing simple monitoring summary
-- Try to use a large model for more natural interaction
+### 2. 配置环境变量
 
-## Notes
+在项目根目录创建 `.env`，至少包含：
 
-This project is more about internship learning and prototype practice for now. Later, during development, I will continue to add more detailed technical plans and progress updates.
+```env
+OPENAI_API_KEY=your_api_key
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TIMEOUT=60
+```
+
+### 3. 启动后端
+
+```cmd
+python app.py
+```
+
+默认地址：
+```text
+http://127.0.0.1:5000
+```
+
+### 4. 启动 VS Code 插件
+
+1. 用 VS Code 打开 `vscode-extension` 目录
+2. 按 `F5`
+3. 在新的 Extension Development Host 窗口中执行命令 `Cloud CI/CD: Ask Assistant`
+
+## 统一执行接口示例
+
+### 真实执行 Python 测试并 Docker 部署
+
+```cmd
+curl -X POST http://127.0.0.1:5000/api/tasks/execute ^
+  -H "Content-Type: application/json" ^
+  -d "{\"intent\":\"deploy_project\",\"project\":{\"repo_url\":\"https://github.com/zche0345/demo.git\",\"project_type\":\"python\"},\"execution\":{\"install\":{\"enabled\":true,\"command\":\"pip install -r requirements.txt\"},\"test\":{\"enabled\":true,\"framework\":\"pytest\",\"command\":\"python -m pytest\",\"timeout_seconds\":600},\"deploy\":{\"enabled\":true,\"target\":\"docker\",\"docker\":{\"dockerfile_path\":\"Dockerfile\",\"image_name\":\"demo-app\",\"image_tag\":\"latest\",\"container_name\":\"demo-app\",\"ports\":[],\"env\":{}}}}}"
+```
+
+成功后返回结果中会包含：
+- `install_result`
+- `test_result`
+- `deploy_result`
+- `status = deployed`
+
+## 当前设计原则
+
+目前项目按“适配器/执行器”思路在扩展：
+- 测试执行按项目类型适配
+  - 当前已实现：`python`
+  - 计划扩展：`nodejs`、`java`
+- 部署执行按部署目标适配
+  - 当前已实现：`docker`
+  - 计划扩展：`server`、`cloud`
+
+质量门禁规则：
+- `deploy_project`
+- `package_project`
+- `merge_code`
+
+以上任务在当前设计下都要求先通过单元测试，否则流程会被阻塞。
+
+## 当前限制
+
+当前版本仍然是 MVP，主要限制包括：
+- 目前只完整实现了 Python 测试执行器
+- 目前只完整实现了 Docker 部署器
+- VS Code 插件当前主要用于最小交互演示，还没有完全接入统一执行接口
+- 还没有接入 SQLite 日志持久化
+- 还没有实现部署后监控检查
+- 还没有实现 Node.js / Java 执行器
+
+## 后续计划
+
+下一步重点方向：
+- 把插件接到统一执行接口
+- 增加部署后状态检查
+- 增加 SQLite 日志与任务历史
+- 扩展 Node.js / Java 测试执行器
+- 扩展更多部署目标
+- 再考虑前后端分离与服务化部署
+
+## 技术设计文档
+
+详细设计见：
+- `docs/tech_design.md`
