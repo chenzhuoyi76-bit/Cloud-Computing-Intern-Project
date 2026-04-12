@@ -17,3 +17,7 @@ class Config:
         "TASK_WORKSPACE_ROOT",
         str(BASE_DIR / "runtime" / "workspaces"),
     ).strip()
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{(BASE_DIR / 'runtime' / 'app.db').as_posix()}",
+    ).strip()

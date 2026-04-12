@@ -133,8 +133,9 @@ class LlmApiTestCase(unittest.TestCase):
         self.assertEqual(body["repository"]["repo_name"], "demo")
         self.assertEqual(body["task_request"]["project"]["branch"], "main")
 
+    @patch("backend.routes.tasks.create_task_execution_record")
     @patch("backend.routes.tasks.execute_task_pipeline")
-    def test_execute_task_ready_when_tests_pass(self, mock_execute_task_pipeline):
+    def test_execute_task_ready_when_tests_pass(self, mock_execute_task_pipeline, mock_create_record):
         mock_execute_task_pipeline.return_value = {
             "status": "deployed",
             "message": "任务执行完成，部署已成功。",
@@ -157,6 +158,7 @@ class LlmApiTestCase(unittest.TestCase):
                 "task": "deploy_project"
             },
         }
+        mock_create_record.return_value = {"id": 1, "status": "deployed"}
 
         payload = {
             "intent": "deploy_project",
@@ -179,9 +181,11 @@ class LlmApiTestCase(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["status"], "deployed")
         self.assertEqual(body["deploy_result"]["status"], "passed")
+        self.assertEqual(body["history_record"]["id"], 1)
 
     @patch("backend.routes.tasks.execute_task_pipeline")
-    def test_execute_task_blocked_when_tests_fail(self, mock_execute_task_pipeline):
+    @patch("backend.routes.tasks.create_task_execution_record")
+    def test_execute_task_blocked_when_tests_fail(self, mock_create_record, mock_execute_task_pipeline):
         mock_execute_task_pipeline.return_value = {
             "status": "blocked",
             "message": "单元测试未通过，已触发质量门禁。",
@@ -202,6 +206,7 @@ class LlmApiTestCase(unittest.TestCase):
                 "blocking_reason": "unit_tests_not_passed"
             },
         }
+        mock_create_record.return_value = {"id": 2, "status": "blocked"}
 
         payload = {
             "intent": "deploy_project",
@@ -224,6 +229,28 @@ class LlmApiTestCase(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["status"], "blocked")
         self.assertEqual(body["dispatch_result"]["blocking_reason"], "unit_tests_not_passed")
+        self.assertEqual(body["history_record"]["id"], 2)
+
+    @patch("backend.routes.tasks.list_task_execution_records")
+    def test_list_task_history(self, mock_list_records):
+        mock_list_records.return_value = [
+            {"id": 2, "status": "blocked"},
+            {"id": 1, "status": "deployed"},
+        ]
+
+        response = self.client.get("/api/tasks/history?limit=5")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.get_json()["records"]), 2)
+
+    @patch("backend.routes.tasks.get_task_execution_record")
+    def test_get_task_history_record(self, mock_get_record):
+        mock_get_record.return_value = {"id": 1, "status": "deployed"}
+
+        response = self.client.get("/api/tasks/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["id"], 1)
 
 
 if __name__ == "__main__":
