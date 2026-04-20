@@ -1,4 +1,5 @@
 import subprocess
+from time import perf_counter
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ class PythonTestRunner(BaseTestRunner):
         project: dict[str, Any],
     ) -> dict[str, Any]:
         command = install_config["command"]
+        started_at = perf_counter()
         completed = _run_shell_command(command=command, cwd=repo_path)
         return {
             "step": "install",
@@ -23,6 +25,7 @@ class PythonTestRunner(BaseTestRunner):
             "returncode": completed.returncode,
             "stdout": completed.stdout,
             "stderr": completed.stderr,
+            "duration_seconds": round(perf_counter() - started_at, 3),
         }
 
     def run_tests(
@@ -32,6 +35,7 @@ class PythonTestRunner(BaseTestRunner):
         project: dict[str, Any],
     ) -> dict[str, Any]:
         command = test_config["command"]
+        started_at = perf_counter()
         completed = _run_shell_command(
             command=command,
             cwd=repo_path,
@@ -45,6 +49,7 @@ class PythonTestRunner(BaseTestRunner):
             "returncode": completed.returncode,
             "stdout": completed.stdout,
             "stderr": completed.stderr,
+            "duration_seconds": round(perf_counter() - started_at, 3),
         }
 
 

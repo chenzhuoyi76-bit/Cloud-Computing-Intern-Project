@@ -1,5 +1,6 @@
 import re
 import subprocess
+from time import perf_counter
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Any
@@ -10,6 +11,7 @@ class RepoFetchError(Exception):
 
 
 def prepare_repository(task_request: dict[str, Any], workspace_root: str) -> dict[str, Any]:
+    started_at = perf_counter()
     project = task_request["project"]
     repo_url = project["repo_url"]
     branch = project.get("branch", "main")
@@ -39,6 +41,8 @@ def prepare_repository(task_request: dict[str, Any], workspace_root: str) -> dic
         _run_command(["git", "checkout", commit_sha], cwd=repo_path)
         checked_out_ref = commit_sha
 
+    duration_seconds = round(perf_counter() - started_at, 3)
+
     return {
         "workspace_path": str(task_workspace),
         "repo_path": str(repo_path),
@@ -46,6 +50,8 @@ def prepare_repository(task_request: dict[str, Any], workspace_root: str) -> dic
         "repo_url": repo_url,
         "branch": branch,
         "checked_out_ref": checked_out_ref,
+        "status": "passed",
+        "duration_seconds": duration_seconds,
     }
 
 

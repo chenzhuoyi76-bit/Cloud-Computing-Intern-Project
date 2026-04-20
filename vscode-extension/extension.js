@@ -2,6 +2,7 @@ const vscode = require("vscode");
 
 const DEFAULT_INTENT_API_URL = "http://127.0.0.1:5000/api/llm/intent";
 const DEFAULT_EXECUTE_API_URL = "http://127.0.0.1:5000/api/tasks/execute";
+const DEFAULT_HISTORY_API_URL = "http://127.0.0.1:5000/api/tasks/history";
 
 function activate(context) {
   const askIntentDisposable = vscode.commands.registerCommand(
@@ -79,7 +80,64 @@ function activate(context) {
     }
   );
 
-  context.subscriptions.push(askIntentDisposable, executeTaskDisposable);
+  const viewTaskHistoryDisposable = vscode.commands.registerCommand(
+    "cloudCicdAssistant.viewTaskHistory",
+    async () => {
+      const config = vscode.workspace.getConfiguration("cloudCicdAssistant");
+      const apiUrl = config.get("historyApiUrl", DEFAULT_HISTORY_API_URL);
+
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "Cloud CI/CD Assistant 正在读取任务历史",
+          cancellable: false,
+        },
+        async () => {
+          try {
+            const listResult = await getJson(apiUrl);
+            const records = Array.isArray(listResult.records) ? listResult.records : [];
+
+            if (records.length === 0) {
+              vscode.window.showInformationMessage("当前还没有任务历史记录");
+              return;
+            }
+
+            const picked = await vscode.window.showQuickPick(
+              records.map((record) => ({
+                label: `#${record.id} ${record.status || "unknown"} · ${record.intent || "unknown"}`,
+                description: record.repo_url || "",
+                detail: `${record.created_at || ""} ${record.message || ""}`.trim(),
+                recordId: record.id,
+              })),
+              {
+                title: "选择要查看的任务历史",
+                ignoreFocusOut: true,
+                matchOnDescription: true,
+                matchOnDetail: true,
+              }
+            );
+
+            if (!picked) {
+              return;
+            }
+
+            const detailResult = await getJson(`${apiUrl}/${picked.recordId}`);
+            const message = formatHistoryResult(detailResult);
+            await showResultDocument(`Task History #${picked.recordId}`, message);
+            vscode.window.showInformationMessage(`已打开任务历史 #${picked.recordId}`);
+          } catch (error) {
+            showError(error);
+          }
+        }
+      );
+    }
+  );
+
+  context.subscriptions.push(
+    askIntentDisposable,
+    executeTaskDisposable,
+    viewTaskHistoryDisposable
+  );
 }
 
 async function collectTaskPayload() {
@@ -224,10 +282,19 @@ function formatExecutionResult(result) {
     `整体状态：${result.status}`,
     `消息：${result.message}`,
     "",
+    "[执行概览]",
+    `总耗时：${formatDuration(result.timings?.total)}`,
+    `代码拉取：${result.status_overview?.repository || ""}`,
+    `依赖安装：${result.status_overview?.install || ""}`,
+    `测试执行：${result.status_overview?.test || ""}`,
+    `质量门禁：${result.status_overview?.quality_gate || ""}`,
+    `部署执行：${result.status_overview?.deploy || ""}`,
+    "",
     "[仓库]",
     `仓库路径：${result.repository?.repo_path || ""}`,
     `分支：${result.repository?.branch || ""}`,
     `代码来源：${result.repository?.repo_url || ""}`,
+    `拉取耗时：${formatDuration(result.timings?.repository)}`,
     "",
     "[测试门禁]",
     `门禁状态：${result.dispatch_result?.status || ""}`,
@@ -239,6 +306,7 @@ function formatExecutionResult(result) {
     lines.push(`状态：${result.install_result.status}`);
     lines.push(`命令：${result.install_result.command}`);
     lines.push(`返回码：${result.install_result.returncode}`);
+    lines.push(`耗时：${formatDuration(result.timings?.install ?? result.install_result.duration_seconds)}`);
   }
 
   if (result.test_result) {
@@ -246,6 +314,7 @@ function formatExecutionResult(result) {
     lines.push(`状态：${result.test_result.status}`);
     lines.push(`命令：${result.test_result.command}`);
     lines.push(`返回码：${result.test_result.returncode}`);
+    lines.push(`耗时：${formatDuration(result.timings?.test ?? result.test_result.duration_seconds)}`);
     lines.push("输出：");
     lines.push(result.test_result.stdout || "");
     if (result.test_result.stderr) {
@@ -258,6 +327,7 @@ function formatExecutionResult(result) {
     lines.push("", "[部署执行]");
     lines.push(`状态：${result.deploy_result.status}`);
     lines.push(`目标：${result.deploy_result.target || ""}`);
+    lines.push(`耗时：${formatDuration(result.timings?.deploy ?? result.deploy_result.duration_seconds)}`);
     if (result.deploy_result.image) {
       lines.push(`镜像：${result.deploy_result.image}`);
     }
@@ -269,6 +339,90 @@ function formatExecutionResult(result) {
     }
     if (result.deploy_result.error) {
       lines.push(`错误：${result.deploy_result.error}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function formatHistoryResult(record) {
+  const lines = [
+    `任务记录：#${record.id || ""}`,
+    `创建时间：${record.created_at || ""}`,
+    `整体状态：${record.status || ""}`,
+    `消息：${record.message || ""}`,
+    "",
+    "[执行概览]",
+    `总耗时：${formatDuration(record.timings?.total)}`,
+    `代码拉取：${record.status_overview?.repository || ""}`,
+    `依赖安装：${record.status_overview?.install || ""}`,
+    `测试执行：${record.status_overview?.test || ""}`,
+    `质量门禁：${record.status_overview?.quality_gate || ""}`,
+    `部署执行：${record.status_overview?.deploy || ""}`,
+    "",
+    "[任务信息]",
+    `意图：${record.intent || ""}`,
+    `项目类型：${record.project_type || ""}`,
+    `仓库：${record.repo_url || ""}`,
+  ];
+
+  if (record.repository) {
+    lines.push("", "[仓库]");
+    lines.push(`仓库路径：${record.repository.repo_path || ""}`);
+    lines.push(`分支：${record.repository.branch || ""}`);
+    lines.push(`代码来源：${record.repository.repo_url || ""}`);
+    lines.push(`拉取耗时：${formatDuration(record.timings?.repository ?? record.repository.duration_seconds)}`);
+  }
+
+  if (record.dispatch_result) {
+    lines.push("", "[测试门禁]");
+    lines.push(`门禁状态：${record.dispatch_result.status || ""}`);
+    lines.push(`是否阻塞：${record.dispatch_result.blocked ? "是" : "否"}`);
+    if (record.dispatch_result.message) {
+      lines.push(`门禁消息：${record.dispatch_result.message}`);
+    }
+  }
+
+  if (record.install_result) {
+    lines.push("", "[依赖安装]");
+    lines.push(`状态：${record.install_result.status || ""}`);
+    lines.push(`命令：${record.install_result.command || ""}`);
+    lines.push(`返回码：${record.install_result.returncode ?? ""}`);
+    lines.push(`耗时：${formatDuration(record.timings?.install ?? record.install_result.duration_seconds)}`);
+  }
+
+  if (record.test_result) {
+    lines.push("", "[测试执行]");
+    lines.push(`状态：${record.test_result.status || ""}`);
+    lines.push(`命令：${record.test_result.command || ""}`);
+    lines.push(`返回码：${record.test_result.returncode ?? ""}`);
+    lines.push(`耗时：${formatDuration(record.timings?.test ?? record.test_result.duration_seconds)}`);
+    if (record.test_result.stdout) {
+      lines.push("输出：");
+      lines.push(record.test_result.stdout);
+    }
+    if (record.test_result.stderr) {
+      lines.push("错误输出：");
+      lines.push(record.test_result.stderr);
+    }
+  }
+
+  if (record.deploy_result) {
+    lines.push("", "[部署执行]");
+    lines.push(`状态：${record.deploy_result.status || ""}`);
+    lines.push(`目标：${record.deploy_result.target || ""}`);
+    lines.push(`耗时：${formatDuration(record.timings?.deploy ?? record.deploy_result.duration_seconds)}`);
+    if (record.deploy_result.image) {
+      lines.push(`镜像：${record.deploy_result.image}`);
+    }
+    if (record.deploy_result.container_name) {
+      lines.push(`容器名：${record.deploy_result.container_name}`);
+    }
+    if (record.deploy_result.container_id) {
+      lines.push(`容器 ID：${record.deploy_result.container_id}`);
+    }
+    if (record.deploy_result.error) {
+      lines.push(`错误：${record.deploy_result.error}`);
     }
   }
 
@@ -289,6 +443,13 @@ function normalizeDockerName(value) {
     || "app";
 }
 
+function formatDuration(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "N/A";
+  }
+  return `${value.toFixed(3)}s`;
+}
+
 async function postJson(apiUrl, payload) {
   const response = await fetch(apiUrl, {
     method: "POST",
@@ -296,6 +457,21 @@ async function postJson(apiUrl, payload) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+  });
+
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || "后端请求失败");
+  }
+  return result;
+}
+
+async function getJson(apiUrl) {
+  const response = await fetch(apiUrl, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
 
   const result = await response.json();

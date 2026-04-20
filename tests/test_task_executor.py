@@ -13,15 +13,31 @@ class DummyRunner:
         self.test_status = test_status
 
     def install_dependencies(self, repo_path, install_config, project):
-        return {"status": self.install_status, "command": install_config["command"]}
+        return {
+            "step": "install",
+            "status": self.install_status,
+            "command": install_config["command"],
+            "duration_seconds": 0.123,
+        }
 
     def run_tests(self, repo_path, test_config, project):
-        return {"status": self.test_status, "command": test_config["command"]}
+        return {
+            "step": "test",
+            "status": self.test_status,
+            "command": test_config["command"],
+            "duration_seconds": 0.456,
+        }
 
 
 class DummyDeployer:
     def deploy(self, repo_path, deploy_config, project):
-        return {"status": "passed", "target": "docker", "container_id": "abc123"}
+        return {
+            "step": "deploy",
+            "status": "passed",
+            "target": "docker",
+            "container_id": "abc123",
+            "duration_seconds": 0.789,
+        }
 
 
 class TaskExecutorTestCase(unittest.TestCase):
@@ -49,6 +65,8 @@ class TaskExecutorTestCase(unittest.TestCase):
             "repo_url": "https://github.com/example/demo.git",
             "branch": "main",
             "checked_out_ref": "main",
+            "status": "passed",
+            "duration_seconds": 0.111,
         }
 
     def tearDown(self):
@@ -68,6 +86,13 @@ class TaskExecutorTestCase(unittest.TestCase):
         self.assertEqual(result["status"], "deployed")
         self.assertEqual(result["test_result"]["status"], "passed")
         self.assertEqual(result["deploy_result"]["status"], "passed")
+        self.assertEqual(result["status_overview"]["repository"], "passed")
+        self.assertEqual(result["status_overview"]["deploy"], "passed")
+        self.assertEqual(result["timings"]["repository"], 0.111)
+        self.assertEqual(result["timings"]["install"], 0.123)
+        self.assertEqual(result["timings"]["test"], 0.456)
+        self.assertEqual(result["timings"]["deploy"], 0.789)
+        self.assertGreaterEqual(result["timings"]["total"], 0)
 
     @patch("backend.services.task_executor.get_test_runner")
     @patch("backend.services.task_executor.prepare_repository")
@@ -80,6 +105,8 @@ class TaskExecutorTestCase(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertIsNone(result["deploy_result"])
         self.assertEqual(result["dispatch_result"]["blocking_reason"], "unit_tests_not_passed")
+        self.assertEqual(result["status_overview"]["deploy"], "skipped")
+        self.assertEqual(result["timings"]["deploy"], None)
 
 
 if __name__ == "__main__":

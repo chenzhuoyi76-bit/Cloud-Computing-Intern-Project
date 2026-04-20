@@ -1,4 +1,5 @@
 import subprocess
+from time import perf_counter
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ class DockerDeployer(BaseDeployer):
         deploy_config: dict[str, Any],
         project: dict[str, Any],
     ) -> dict[str, Any]:
+        deploy_started_at = perf_counter()
         docker_config = deploy_config["docker"]
         dockerfile_path = repo_path / docker_config["dockerfile_path"]
         if not dockerfile_path.exists():
@@ -29,7 +31,9 @@ class DockerDeployer(BaseDeployer):
             image_ref,
             ".",
         ]
+        build_started_at = perf_counter()
         build_result = _run_command(build_cmd, cwd=repo_path)
+        build_duration_seconds = round(perf_counter() - build_started_at, 3)
         if build_result.returncode != 0:
             raise DeploymentError(_format_failure("docker build", build_result))
 
@@ -40,7 +44,9 @@ class DockerDeployer(BaseDeployer):
             run_cmd.extend(["-e", f"{key}={value}"])
         run_cmd.append(image_ref)
 
+        run_started_at = perf_counter()
         run_result = _run_command(run_cmd, cwd=repo_path)
+        run_duration_seconds = round(perf_counter() - run_started_at, 3)
         if run_result.returncode != 0:
             raise DeploymentError(_format_failure("docker run", run_result))
 
@@ -48,6 +54,9 @@ class DockerDeployer(BaseDeployer):
             "step": "deploy",
             "target": "docker",
             "status": "passed",
+            "duration_seconds": round(perf_counter() - deploy_started_at, 3),
+            "build_duration_seconds": build_duration_seconds,
+            "run_duration_seconds": run_duration_seconds,
             "image": image_ref,
             "container_name": docker_config["container_name"],
             "build_command": " ".join(build_cmd),

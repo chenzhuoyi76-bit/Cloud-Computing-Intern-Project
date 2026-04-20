@@ -12,7 +12,8 @@
   ],
   "activationEvents": [
     "onCommand:cloudCicdAssistant.askIntent",
-    "onCommand:cloudCicdAssistant.executeTask"
+    "onCommand:cloudCicdAssistant.executeTask",
+    "onCommand:cloudCicdAssistant.viewTaskHistory"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -24,6 +25,10 @@
       {
         "command": "cloudCicdAssistant.executeTask",
         "title": "Cloud CI/CD: Execute Task"
+      },
+      {
+        "command": "cloudCicdAssistant.viewTaskHistory",
+        "title": "Cloud CI/CD: View Task History"
       }
     ],
     "configuration": {
@@ -38,6 +43,11 @@
           "type": "string",
           "default": "http://127.0.0.1:5000/api/tasks/execute",
           "description": "Backend API URL for task execution."
+        },
+        "cloudCicdAssistant.historyApiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5000/api/tasks/history",
+          "description": "Backend API URL for task history."
         }
       }
     }

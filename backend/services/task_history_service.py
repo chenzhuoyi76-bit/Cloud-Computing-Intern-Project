@@ -55,6 +55,12 @@ def get_task_execution_record(record_id: int) -> dict[str, Any] | None:
 
 
 def serialize_task_execution_record(record: TaskExecutionRecord, include_payloads: bool = True) -> dict[str, Any]:
+    repository = json.loads(record.repository_json)
+    install_result = json.loads(record.install_result_json)
+    test_result = json.loads(record.test_result_json)
+    deploy_result = json.loads(record.deploy_result_json)
+    dispatch_result = json.loads(record.dispatch_result_json)
+
     data = {
         "id": record.id,
         "intent": record.intent,
@@ -63,16 +69,90 @@ def serialize_task_execution_record(record: TaskExecutionRecord, include_payload
         "status": record.status,
         "message": record.message,
         "created_at": record.created_at.isoformat(),
+        "status_overview": _build_status_overview(
+            overall_status=record.status,
+            repository=repository,
+            install_result=install_result,
+            test_result=test_result,
+            deploy_result=deploy_result,
+            dispatch_result=dispatch_result,
+        ),
+        "timings": _build_timings(
+            repository=repository,
+            install_result=install_result,
+            test_result=test_result,
+            deploy_result=deploy_result,
+        ),
     }
     if include_payloads:
         data.update(
             {
-                "repository": json.loads(record.repository_json),
+                "repository": repository,
                 "task_request": json.loads(record.task_request_json),
-                "install_result": json.loads(record.install_result_json),
-                "test_result": json.loads(record.test_result_json),
-                "deploy_result": json.loads(record.deploy_result_json),
-                "dispatch_result": json.loads(record.dispatch_result_json),
+                "install_result": install_result,
+                "test_result": test_result,
+                "deploy_result": deploy_result,
+                "dispatch_result": dispatch_result,
             }
         )
     return data
+
+
+def _build_status_overview(
+    overall_status: str,
+    repository: dict[str, Any] | None,
+    install_result: dict[str, Any] | None,
+    test_result: dict[str, Any] | None,
+    deploy_result: dict[str, Any] | None,
+    dispatch_result: dict[str, Any] | None,
+) -> dict[str, str]:
+    return {
+        "overall": overall_status,
+        "repository": _step_status(repository, default="unknown"),
+        "install": _step_status(install_result, default="skipped"),
+        "test": _step_status(test_result, default="skipped"),
+        "quality_gate": (dispatch_result or {}).get("status", "unknown"),
+        "deploy": _step_status(deploy_result, default="skipped"),
+    }
+
+
+def _build_timings(
+    repository: dict[str, Any] | None,
+    install_result: dict[str, Any] | None,
+    test_result: dict[str, Any] | None,
+    deploy_result: dict[str, Any] | None,
+) -> dict[str, float | None]:
+    repository_duration = _step_duration(repository)
+    install_duration = _step_duration(install_result)
+    test_duration = _step_duration(test_result)
+    deploy_duration = _step_duration(deploy_result)
+    return {
+        "repository": repository_duration,
+        "install": install_duration,
+        "test": test_duration,
+        "deploy": deploy_duration,
+        "total": round(
+            sum(
+                duration or 0
+                for duration in (
+                    repository_duration,
+                    install_duration,
+                    test_duration,
+                    deploy_duration,
+                )
+            ),
+            3,
+        ),
+    }
+
+
+def _step_status(step_result: dict[str, Any] | None, default: str) -> str:
+    if not step_result:
+        return default
+    return step_result.get("status", default)
+
+
+def _step_duration(step_result: dict[str, Any] | None) -> float | None:
+    if not step_result:
+        return None
+    return step_result.get("duration_seconds")
