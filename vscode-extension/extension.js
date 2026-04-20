@@ -250,13 +250,13 @@ async function collectTaskPayload() {
     },
     execution: {
       install: {
-        enabled: projectType.label === "python",
-        command: "pip install -r requirements.txt",
+        enabled: projectType.label === "python" || projectType.label === "nodejs",
+        command: defaultInstallCommand(projectType.label),
       },
       test: {
-        enabled: projectType.label === "python",
-        framework: "pytest",
-        command: "python -m pytest",
+        enabled: projectType.label === "python" || projectType.label === "nodejs",
+        framework: defaultTestFramework(projectType.label),
+        command: defaultTestCommand(projectType.label),
         timeout_seconds: 600,
       },
       deploy: {
@@ -483,6 +483,33 @@ function normalizeDockerName(value) {
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^[._-]+|[._-]+$/g, "")
     || "app";
+}
+
+function defaultInstallCommand(projectType) {
+  const mapping = {
+    python: "pip install -r requirements.txt",
+    nodejs: "npm install",
+    java: "mvn dependency:resolve",
+  };
+  return mapping[projectType] || "";
+}
+
+function defaultTestFramework(projectType) {
+  const mapping = {
+    python: "pytest",
+    nodejs: "npm",
+    java: "maven",
+  };
+  return mapping[projectType] || "";
+}
+
+function defaultTestCommand(projectType) {
+  const mapping = {
+    python: "python -m pytest",
+    nodejs: "npm test",
+    java: "mvn test",
+  };
+  return mapping[projectType] || "";
 }
 
 function formatDuration(value) {

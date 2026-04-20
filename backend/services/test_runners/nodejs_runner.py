@@ -4,8 +4,8 @@ from typing import Any
 from backend.services.test_runners.base import BaseTestRunner
 
 
-class PythonTestRunner(BaseTestRunner):
-    project_type = "python"
+class NodejsTestRunner(BaseTestRunner):
+    project_type = "nodejs"
 
     def install_dependencies(
         self,
@@ -13,10 +13,9 @@ class PythonTestRunner(BaseTestRunner):
         install_config: dict[str, Any],
         project: dict[str, Any],
     ) -> dict[str, Any]:
-        command = install_config["command"]
         return self._execute_step(
             step="install",
-            command=command,
+            command=install_config["command"],
             cwd=repo_path,
         )
 
@@ -26,10 +25,9 @@ class PythonTestRunner(BaseTestRunner):
         test_config: dict[str, Any],
         project: dict[str, Any],
     ) -> dict[str, Any]:
-        command = test_config["command"]
         return self._execute_step(
             step="test",
-            command=command,
+            command=test_config["command"],
             cwd=repo_path,
             timeout_seconds=test_config["timeout_seconds"],
             extra_fields={"framework": test_config["framework"]},
