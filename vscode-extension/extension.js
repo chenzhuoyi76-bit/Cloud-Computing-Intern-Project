@@ -105,8 +105,8 @@ function activate(context) {
             const picked = await vscode.window.showQuickPick(
               records.map((record) => ({
                 label: `#${record.id} ${record.status || "unknown"} · ${record.intent || "unknown"}`,
-                description: record.repo_url || "",
-                detail: `${record.created_at || ""} ${record.message || ""}`.trim(),
+                description: record.summary || record.repo_url || "",
+                detail: `${record.created_at || ""} ${record.repo_url || ""}`.trim(),
                 recordId: record.id,
               })),
               {
@@ -289,6 +289,7 @@ function formatExecutionResult(result) {
     `测试执行：${result.status_overview?.test || ""}`,
     `质量门禁：${result.status_overview?.quality_gate || ""}`,
     `部署执行：${result.status_overview?.deploy || ""}`,
+    `部署监测：${result.status_overview?.monitoring || ""}`,
     "",
     "[仓库]",
     `仓库路径：${result.repository?.repo_path || ""}`,
@@ -342,6 +343,26 @@ function formatExecutionResult(result) {
     }
   }
 
+  if (result.monitoring_result) {
+    lines.push("", "[部署后监测]");
+    lines.push(`状态：${result.monitoring_result.status || ""}`);
+    lines.push(`目标：${result.monitoring_result.target || ""}`);
+    lines.push(`耗时：${formatDuration(result.timings?.monitoring ?? result.monitoring_result.duration_seconds)}`);
+    if (result.monitoring_result.container_status) {
+      lines.push(`容器状态：${result.monitoring_result.container_status}`);
+    }
+    if (typeof result.monitoring_result.running === "boolean") {
+      lines.push(`是否运行中：${result.monitoring_result.running ? "是" : "否"}`);
+    }
+    if (result.monitoring_result.inspect_command) {
+      lines.push(`检查命令：${result.monitoring_result.inspect_command}`);
+    }
+    if (result.monitoring_result.inspect_stderr) {
+      lines.push("错误输出：");
+      lines.push(result.monitoring_result.inspect_stderr);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -359,6 +380,7 @@ function formatHistoryResult(record) {
     `测试执行：${record.status_overview?.test || ""}`,
     `质量门禁：${record.status_overview?.quality_gate || ""}`,
     `部署执行：${record.status_overview?.deploy || ""}`,
+    `部署监测：${record.status_overview?.monitoring || ""}`,
     "",
     "[任务信息]",
     `意图：${record.intent || ""}`,
@@ -423,6 +445,26 @@ function formatHistoryResult(record) {
     }
     if (record.deploy_result.error) {
       lines.push(`错误：${record.deploy_result.error}`);
+    }
+  }
+
+  if (record.monitoring_result) {
+    lines.push("", "[部署后监测]");
+    lines.push(`状态：${record.monitoring_result.status || ""}`);
+    lines.push(`目标：${record.monitoring_result.target || ""}`);
+    lines.push(`耗时：${formatDuration(record.timings?.monitoring ?? record.monitoring_result.duration_seconds)}`);
+    if (record.monitoring_result.container_status) {
+      lines.push(`容器状态：${record.monitoring_result.container_status}`);
+    }
+    if (typeof record.monitoring_result.running === "boolean") {
+      lines.push(`是否运行中：${record.monitoring_result.running ? "是" : "否"}`);
+    }
+    if (record.monitoring_result.inspect_command) {
+      lines.push(`检查命令：${record.monitoring_result.inspect_command}`);
+    }
+    if (record.monitoring_result.inspect_stderr) {
+      lines.push("错误输出：");
+      lines.push(record.monitoring_result.inspect_stderr);
     }
   }
 

@@ -30,6 +30,9 @@ class DummyRunner:
 
 
 class DummyDeployer:
+    def __init__(self, monitoring_status="passed"):
+        self.monitoring_status = monitoring_status
+
     def deploy(self, repo_path, deploy_config, project):
         return {
             "step": "deploy",
@@ -37,6 +40,17 @@ class DummyDeployer:
             "target": "docker",
             "container_id": "abc123",
             "duration_seconds": 0.789,
+        }
+
+    def monitor_deployment(self, repo_path, deploy_config, project, deploy_result, monitoring_config=None):
+        return {
+            "step": "monitor",
+            "status": self.monitoring_status,
+            "target": "docker",
+            "container_id": "abc123",
+            "container_status": "running" if self.monitoring_status == "passed" else "exited",
+            "running": self.monitoring_status == "passed",
+            "duration_seconds": 0.222,
         }
 
 
@@ -86,12 +100,15 @@ class TaskExecutorTestCase(unittest.TestCase):
         self.assertEqual(result["status"], "deployed")
         self.assertEqual(result["test_result"]["status"], "passed")
         self.assertEqual(result["deploy_result"]["status"], "passed")
+        self.assertEqual(result["monitoring_result"]["status"], "passed")
         self.assertEqual(result["status_overview"]["repository"], "passed")
         self.assertEqual(result["status_overview"]["deploy"], "passed")
+        self.assertEqual(result["status_overview"]["monitoring"], "passed")
         self.assertEqual(result["timings"]["repository"], 0.111)
         self.assertEqual(result["timings"]["install"], 0.123)
         self.assertEqual(result["timings"]["test"], 0.456)
         self.assertEqual(result["timings"]["deploy"], 0.789)
+        self.assertEqual(result["timings"]["monitoring"], 0.222)
         self.assertGreaterEqual(result["timings"]["total"], 0)
 
     @patch("backend.services.task_executor.get_test_runner")
@@ -104,9 +121,28 @@ class TaskExecutorTestCase(unittest.TestCase):
 
         self.assertEqual(result["status"], "blocked")
         self.assertIsNone(result["deploy_result"])
+        self.assertIsNone(result["monitoring_result"])
         self.assertEqual(result["dispatch_result"]["blocking_reason"], "unit_tests_not_passed")
         self.assertEqual(result["status_overview"]["deploy"], "skipped")
+        self.assertEqual(result["status_overview"]["monitoring"], "skipped")
         self.assertEqual(result["timings"]["deploy"], None)
+        self.assertEqual(result["timings"]["monitoring"], None)
+
+    @patch("backend.services.task_executor.get_deployer")
+    @patch("backend.services.task_executor.get_test_runner")
+    @patch("backend.services.task_executor.prepare_repository")
+    def test_execute_pipeline_fails_when_post_deploy_monitoring_fails(self, mock_prepare_repository, mock_get_test_runner, mock_get_deployer):
+        mock_prepare_repository.return_value = self.repository_result
+        mock_get_test_runner.return_value = DummyRunner()
+        mock_get_deployer.return_value = DummyDeployer(monitoring_status="failed")
+
+        result = execute_task_pipeline(self.task_request, workspace_root=str(self.workspace_root.parent))
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["deploy_result"]["status"], "passed")
+        self.assertEqual(result["monitoring_result"]["status"], "failed")
+        self.assertEqual(result["status_overview"]["monitoring"], "failed")
+        self.assertEqual(result["message"], "部署已完成，但部署后状态检查未通过。")
 
 
 if __name__ == "__main__":

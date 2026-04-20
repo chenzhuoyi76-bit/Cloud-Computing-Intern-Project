@@ -60,6 +60,9 @@ def serialize_task_execution_record(record: TaskExecutionRecord, include_payload
     test_result = json.loads(record.test_result_json)
     deploy_result = json.loads(record.deploy_result_json)
     dispatch_result = json.loads(record.dispatch_result_json)
+    monitoring_result = None
+    if isinstance(deploy_result, dict):
+        monitoring_result = deploy_result.get("monitoring_result")
 
     data = {
         "id": record.id,
@@ -75,6 +78,7 @@ def serialize_task_execution_record(record: TaskExecutionRecord, include_payload
             install_result=install_result,
             test_result=test_result,
             deploy_result=deploy_result,
+            monitoring_result=monitoring_result,
             dispatch_result=dispatch_result,
         ),
         "timings": _build_timings(
@@ -82,6 +86,20 @@ def serialize_task_execution_record(record: TaskExecutionRecord, include_payload
             install_result=install_result,
             test_result=test_result,
             deploy_result=deploy_result,
+            monitoring_result=monitoring_result,
+        ),
+        "summary": _build_summary(
+            status=record.status,
+            status_overview=_build_status_overview(
+                overall_status=record.status,
+                repository=repository,
+                install_result=install_result,
+                test_result=test_result,
+                deploy_result=deploy_result,
+                monitoring_result=monitoring_result,
+                dispatch_result=dispatch_result,
+            ),
+            monitoring_result=monitoring_result,
         ),
     }
     if include_payloads:
@@ -92,6 +110,7 @@ def serialize_task_execution_record(record: TaskExecutionRecord, include_payload
                 "install_result": install_result,
                 "test_result": test_result,
                 "deploy_result": deploy_result,
+                "monitoring_result": monitoring_result,
                 "dispatch_result": dispatch_result,
             }
         )
@@ -104,6 +123,7 @@ def _build_status_overview(
     install_result: dict[str, Any] | None,
     test_result: dict[str, Any] | None,
     deploy_result: dict[str, Any] | None,
+    monitoring_result: dict[str, Any] | None,
     dispatch_result: dict[str, Any] | None,
 ) -> dict[str, str]:
     return {
@@ -113,6 +133,7 @@ def _build_status_overview(
         "test": _step_status(test_result, default="skipped"),
         "quality_gate": (dispatch_result or {}).get("status", "unknown"),
         "deploy": _step_status(deploy_result, default="skipped"),
+        "monitoring": _step_status(monitoring_result, default="skipped"),
     }
 
 
@@ -121,16 +142,19 @@ def _build_timings(
     install_result: dict[str, Any] | None,
     test_result: dict[str, Any] | None,
     deploy_result: dict[str, Any] | None,
+    monitoring_result: dict[str, Any] | None,
 ) -> dict[str, float | None]:
     repository_duration = _step_duration(repository)
     install_duration = _step_duration(install_result)
     test_duration = _step_duration(test_result)
     deploy_duration = _step_duration(deploy_result)
+    monitoring_duration = _step_duration(monitoring_result)
     return {
         "repository": repository_duration,
         "install": install_duration,
         "test": test_duration,
         "deploy": deploy_duration,
+        "monitoring": monitoring_duration,
         "total": round(
             sum(
                 duration or 0
@@ -139,6 +163,7 @@ def _build_timings(
                     install_duration,
                     test_duration,
                     deploy_duration,
+                    monitoring_duration,
                 )
             ),
             3,
@@ -156,3 +181,19 @@ def _step_duration(step_result: dict[str, Any] | None) -> float | None:
     if not step_result:
         return None
     return step_result.get("duration_seconds")
+
+
+def _build_summary(
+    status: str,
+    status_overview: dict[str, str],
+    monitoring_result: dict[str, Any] | None,
+) -> str:
+    parts = [f"整体：{status}"]
+    parts.append(f"测试：{status_overview.get('test', 'unknown')}")
+    parts.append(f"部署：{status_overview.get('deploy', 'unknown')}")
+    monitoring_status = status_overview.get("monitoring", "unknown")
+    if monitoring_status != "skipped":
+        parts.append(f"监测：{monitoring_status}")
+    if monitoring_result and monitoring_result.get("container_status"):
+        parts.append(f"容器：{monitoring_result['container_status']}")
+    return "｜".join(parts)

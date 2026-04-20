@@ -1,3 +1,4 @@
+import json
 import subprocess
 from time import perf_counter
 from pathlib import Path
@@ -66,6 +67,52 @@ class DockerDeployer(BaseDeployer):
             "build_stderr": build_result.stderr,
             "run_stdout": run_result.stdout,
             "run_stderr": run_result.stderr,
+        }
+
+    def monitor_deployment(
+        self,
+        repo_path: Path,
+        deploy_config: dict[str, Any],
+        project: dict[str, Any],
+        deploy_result: dict[str, Any],
+        monitoring_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        monitoring_started_at = perf_counter()
+        docker_config = deploy_config["docker"]
+        container_ref = deploy_result.get("container_id") or docker_config["container_name"]
+        inspect_cmd = [
+            "docker",
+            "inspect",
+            "--format",
+            "{{json .State}}",
+            container_ref,
+        ]
+        inspect_result = _run_command(inspect_cmd, cwd=repo_path)
+        duration_seconds = round(perf_counter() - monitoring_started_at, 3)
+        if inspect_result.returncode != 0:
+            raise DeploymentError(_format_failure("docker inspect", inspect_result))
+
+        raw_state = (inspect_result.stdout or "").strip()
+        try:
+            state = json.loads(raw_state) if raw_state else {}
+        except json.JSONDecodeError as exc:
+            raise DeploymentError(f"docker inspect returned invalid state payload: {raw_state}") from exc
+
+        running = bool(state.get("Running"))
+        status = str(state.get("Status", "unknown"))
+
+        return {
+            "step": "monitor",
+            "target": "docker",
+            "status": "passed" if running else "failed",
+            "duration_seconds": duration_seconds,
+            "container_name": docker_config["container_name"],
+            "container_id": deploy_result.get("container_id", ""),
+            "container_status": status,
+            "running": running,
+            "inspect_command": " ".join(inspect_cmd),
+            "inspect_stdout": inspect_result.stdout,
+            "inspect_stderr": inspect_result.stderr,
         }
 
 

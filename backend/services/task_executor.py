@@ -20,6 +20,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
     install_result = None
     test_result = None
     deploy_result = None
+    monitoring_result = None
 
     try:
         runner = get_test_runner(project["project_type"])
@@ -50,6 +51,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
             "install_result": install_result,
             "test_result": test_result,
             "deploy_result": deploy_result,
+            "monitoring_result": monitoring_result,
             "dispatch_result": dispatch_result,
             "status_overview": _build_status_overview(
                 overall_status=overall_status,
@@ -57,6 +59,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
                 install_result=install_result,
                 test_result=test_result,
                 deploy_result=deploy_result,
+                monitoring_result=monitoring_result,
                 dispatch_result=dispatch_result,
             ),
             "timings": _build_timings(
@@ -64,6 +67,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
                 install_result=install_result,
                 test_result=test_result,
                 deploy_result=deploy_result,
+                monitoring_result=monitoring_result,
                 total_duration_seconds=round(perf_counter() - pipeline_started_at, 3),
             ),
         }
@@ -88,7 +92,15 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
                 deploy_config=execution["deploy"],
                 project=project,
             )
-            overall_status = "deployed"
+            monitoring_result = deployer.monitor_deployment(
+                repo_path=repo_path,
+                deploy_config=execution["deploy"],
+                project=project,
+                deploy_result=deploy_result,
+                monitoring_config=execution.get("monitoring"),
+            )
+            deploy_result["monitoring_result"] = monitoring_result
+            overall_status = "deployed" if monitoring_result.get("status") == "passed" else "failed"
         except (UnsupportedDeployTargetError, DeploymentError) as exc:
             overall_status = "failed"
             deploy_result = {
@@ -105,12 +117,14 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
             install_result=install_result,
             test_result=test_result,
             deploy_result=deploy_result,
+            monitoring_result=monitoring_result,
             dispatch_result=dispatch_result,
         ),
         "repository": repository,
         "install_result": install_result,
         "test_result": test_result,
         "deploy_result": deploy_result,
+        "monitoring_result": monitoring_result,
         "dispatch_result": dispatch_result,
         "status_overview": _build_status_overview(
             overall_status=overall_status,
@@ -118,6 +132,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
             install_result=install_result,
             test_result=test_result,
             deploy_result=deploy_result,
+            monitoring_result=monitoring_result,
             dispatch_result=dispatch_result,
         ),
         "timings": _build_timings(
@@ -125,6 +140,7 @@ def execute_task_pipeline(task_request: dict[str, Any], workspace_root: str) -> 
             install_result=install_result,
             test_result=test_result,
             deploy_result=deploy_result,
+            monitoring_result=monitoring_result,
             total_duration_seconds=total_duration_seconds,
         ),
     }
@@ -134,6 +150,7 @@ def _build_message(
     install_result: dict[str, Any] | None,
     test_result: dict[str, Any] | None,
     deploy_result: dict[str, Any] | None,
+    monitoring_result: dict[str, Any] | None,
     dispatch_result: dict[str, Any],
 ) -> str:
     if install_result and install_result["status"] == "failed":
@@ -144,6 +161,8 @@ def _build_message(
         return "流程被质量门禁阻塞。"
     if deploy_result and deploy_result.get("status") == "failed":
         return "部署执行失败。"
+    if monitoring_result and monitoring_result.get("status") == "failed":
+        return "部署已完成，但部署后状态检查未通过。"
     if deploy_result and deploy_result.get("status") == "passed":
         return "任务执行完成，部署已成功。"
     return "任务执行完成，可以进入下一阶段。"
@@ -155,6 +174,7 @@ def _build_status_overview(
     install_result: dict[str, Any] | None,
     test_result: dict[str, Any] | None,
     deploy_result: dict[str, Any] | None,
+    monitoring_result: dict[str, Any] | None,
     dispatch_result: dict[str, Any] | None,
 ) -> dict[str, str]:
     return {
@@ -164,6 +184,7 @@ def _build_status_overview(
         "test": _step_status(test_result, default="skipped"),
         "quality_gate": (dispatch_result or {}).get("status", "unknown"),
         "deploy": _step_status(deploy_result, default="skipped"),
+        "monitoring": _step_status(monitoring_result, default="skipped"),
     }
 
 
@@ -172,6 +193,7 @@ def _build_timings(
     install_result: dict[str, Any] | None,
     test_result: dict[str, Any] | None,
     deploy_result: dict[str, Any] | None,
+    monitoring_result: dict[str, Any] | None,
     total_duration_seconds: float,
 ) -> dict[str, float | None]:
     return {
@@ -179,6 +201,7 @@ def _build_timings(
         "install": _step_duration(install_result),
         "test": _step_duration(test_result),
         "deploy": _step_duration(deploy_result),
+        "monitoring": _step_duration(monitoring_result),
         "total": total_duration_seconds,
     }
 
