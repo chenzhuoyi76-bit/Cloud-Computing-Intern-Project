@@ -30,6 +30,8 @@ Python 版本：3.13.3
 - 分发和卡点接口 `/api/llm/dispatch`
 - 统一执行接口 `/api/tasks/execute`
 - Python `pytest` 执行器
+- Node.js `npm` 测试执行器
+- Java Maven 测试执行器
 - Docker 部署器
 
 ## 当前项目结构
@@ -127,7 +129,8 @@ curl -X POST http://127.0.0.1:5000/api/tasks/execute ^
 目前项目按“适配器/执行器”思路在扩展：
 - 测试执行按项目类型适配
   - 当前已实现：`python`
-  - 计划扩展：`nodejs`、`java`
+  - 当前已实现：`nodejs`
+  - 当前已实现：`java`
 - 部署执行按部署目标适配
   - 当前已实现：`docker`
   - 计划扩展：`server`、`cloud`
@@ -142,12 +145,12 @@ curl -X POST http://127.0.0.1:5000/api/tasks/execute ^
 ## 当前限制
 
 当前版本仍然是 MVP，主要限制包括：
-- 目前只完整实现了 Python 测试执行器
+- 测试执行器已覆盖 Python、Node.js 和 Java
+- Java 执行器当前默认按 Maven 项目执行，Gradle 项目需要显式传入 install/test 命令
 - 目前只完整实现了 Docker 部署器
 - VS Code 插件当前主要用于最小交互演示，还没有完全接入统一执行接口
 - 还没有接入 SQLite 日志持久化
 - 还没有实现部署后监控检查
-- 还没有实现 Node.js / Java 执行器
 
 ## 后续计划
 

@@ -1,4 +1,5 @@
 from backend.services.test_runners.base import UnsupportedProjectTypeError
+from backend.services.test_runners.java_runner import JavaTestRunner
 from backend.services.test_runners.nodejs_runner import NodejsTestRunner
 from backend.services.test_runners.python_runner import PythonTestRunner
 
@@ -7,6 +8,7 @@ def get_test_runner(project_type: str):
     runners = {
         "python": PythonTestRunner(),
         "nodejs": NodejsTestRunner(),
+        "java": JavaTestRunner(),
     }
     runner = runners.get(project_type)
     if runner is None:

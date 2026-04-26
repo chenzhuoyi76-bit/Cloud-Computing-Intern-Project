@@ -51,6 +51,29 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
         self.assertEqual(validated["execution"]["test"]["framework"], "npm")
         self.assertEqual(validated["execution"]["test"]["command"], "npm test")
 
+    def test_validate_minimal_java_deploy_request(self):
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/java-demo.git",
+                "project_type": "java"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "docker",
+                    "docker": {}
+                }
+            }
+        }
+
+        validated = validate_task_request(payload)
+
+        self.assertEqual(validated["project"]["build_system"], "maven")
+        self.assertEqual(validated["execution"]["install"]["command"], "mvn dependency:resolve")
+        self.assertEqual(validated["execution"]["test"]["framework"], "maven")
+        self.assertEqual(validated["execution"]["test"]["command"], "mvn test")
+
     def test_normalize_docker_names_to_lowercase(self):
         payload = {
             "intent": "deploy_project",
