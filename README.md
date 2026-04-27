@@ -13,15 +13,16 @@ Python 版本：3.13.3
 
 ## 当前已完成
 
-目前已经打通了下面这条最小闭环：
+目前已经打通了下面这条本地单机版闭环：
 
 1. 用户通过 VS Code 插件或 HTTP 接口发起任务
 2. 后端调用 OpenAI 做意图识别
 3. 后端进行任务分发和质量门禁判断
 4. 拉取目标 GitHub 仓库到本地工作目录
-5. 针对 Python 项目安装依赖并执行 `python -m pytest`
+5. 根据项目类型选择对应测试执行器
 6. 单元测试通过后执行 Docker 部署
-7. 返回完整执行结果
+7. 部署后自动执行 Docker 容器状态监测
+8. 返回执行结果、阶段耗时、状态摘要，并写入 SQLite 历史记录
 
 已经验证通过的能力包括：
 - Flask 后端 API
@@ -33,6 +34,9 @@ Python 版本：3.13.3
 - Node.js `npm` 测试执行器
 - Java Maven 测试执行器
 - Docker 部署器
+- Docker 部署后状态监测
+- SQLite 任务历史记录
+- VS Code 插件任务执行与历史查看
 
 ## 当前项目结构
 
@@ -106,7 +110,10 @@ http://127.0.0.1:5000
 
 1. 用 VS Code 打开 `vscode-extension` 目录
 2. 按 `F5`
-3. 在新的 Extension Development Host 窗口中执行命令 `Cloud CI/CD: Ask Assistant`
+3. 在新的 Extension Development Host 窗口中执行命令：
+   - `Cloud CI/CD: Ask Assistant`：仅做意图识别
+   - `Cloud CI/CD: Execute Task`：执行完整任务
+   - `Cloud CI/CD: View Task History`：查看任务历史
 
 ## 统一执行接口示例
 
@@ -122,7 +129,20 @@ curl -X POST http://127.0.0.1:5000/api/tasks/execute ^
 - `install_result`
 - `test_result`
 - `deploy_result`
+- `monitoring_result`
+- `timings`
+- `status_overview`
 - `status = deployed`
+
+### 查看任务历史
+
+```cmd
+curl http://127.0.0.1:5000/api/tasks/history
+```
+
+```cmd
+curl http://127.0.0.1:5000/api/tasks/history/1
+```
 
 ## 当前设计原则
 
@@ -148,18 +168,18 @@ curl -X POST http://127.0.0.1:5000/api/tasks/execute ^
 - 测试执行器已覆盖 Python、Node.js 和 Java
 - Java 执行器当前默认按 Maven 项目执行，Gradle 项目需要显式传入 install/test 命令
 - 目前只完整实现了 Docker 部署器
-- VS Code 插件当前主要用于最小交互演示，还没有完全接入统一执行接口
-- 还没有接入 SQLite 日志持久化
-- 还没有实现部署后监控检查
+- 插件交互目前仍然以输入框为主，还没有更成熟的表单或面板式配置体验
+- 目前部署后监测以 Docker 容器状态检查为主，还没有加入更完整的 HTTP health check / 日志诊断
+- Docker 失败诊断和自动清理策略还可以继续加强
+- 远程后端 / agent 形态还没有开始做，当前仍以本地单机版为主
 
 ## 后续计划
 
 下一步重点方向：
-- 把插件接到统一执行接口
-- 增加部署后状态检查
-- 增加 SQLite 日志与任务历史
-- 扩展 Node.js / Java 测试执行器
-- 扩展更多部署目标
+- 补本地启动脚本和更完整的使用说明
+- 增强失败场景测试和错误提示
+- 继续扩展更多部署目标
+- 为后续 server / cloud 部署适配做前置条件检查
 - 再考虑前后端分离与服务化部署
 
 ## 技术设计文档
