@@ -40,7 +40,7 @@ class DockerDeployer(BaseDeployer):
 
         run_cmd = ["docker", "run", "-d", "--name", docker_config["container_name"]]
         for port in docker_config.get("ports", []):
-            run_cmd.extend(["-p", port])
+            run_cmd.extend(["-p", _format_port_mapping(port)])
         for key, value in docker_config.get("env", {}).items():
             run_cmd.extend(["-e", f"{key}={value}"])
         run_cmd.append(image_ref)
@@ -127,6 +127,27 @@ def _run_command(command: list[str], cwd: Path) -> subprocess.CompletedProcess[s
         )
     except FileNotFoundError as exc:
         raise DeploymentError("docker is not installed or not available in PATH.") from exc
+
+
+def _format_port_mapping(port: Any) -> str:
+    if isinstance(port, str):
+        if not port.strip():
+            raise DeploymentError("Docker port mapping cannot be empty.")
+        return port.strip()
+
+    if isinstance(port, dict):
+        host = port.get("host")
+        container = port.get("container")
+        protocol = port.get("protocol")
+        if host is None or container is None:
+            raise DeploymentError("Docker port mapping object must include host and container.")
+
+        mapping = f"{host}:{container}"
+        if protocol:
+            mapping = f"{mapping}/{protocol}"
+        return mapping
+
+    raise DeploymentError("Docker port mapping must be a string or an object.")
 
 
 def _format_failure(step: str, result: subprocess.CompletedProcess[str]) -> str:
