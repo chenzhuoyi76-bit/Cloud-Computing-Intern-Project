@@ -57,7 +57,13 @@ def execute_task():
         return jsonify({"error": str(exc)}), 502
 
     history_record = create_task_execution_record(validated_request, result)
-    return jsonify({"task_request": validated_request, "history_record": history_record, **result})
+    return jsonify(
+        {
+            "task_request": validated_request,
+            "history_record": _build_history_record_summary(history_record),
+            **result,
+        }
+    )
 
 
 @tasks_bp.get("/history")
@@ -77,3 +83,12 @@ def get_task_history(record_id: int):
     if record is None:
         return jsonify({"error": "record not found"}), 404
     return jsonify(record)
+
+
+def _build_history_record_summary(history_record: dict) -> dict:
+    return {
+        "id": history_record.get("id"),
+        "status": history_record.get("status"),
+        "created_at": history_record.get("created_at"),
+        "summary": history_record.get("summary", ""),
+    }

@@ -1,8 +1,8 @@
 import shutil
 import unittest
 from pathlib import Path
+from tempfile import mkdtemp
 from unittest.mock import patch
-from uuid import uuid4
 
 from backend.services.task_executor import execute_task_pipeline
 
@@ -56,10 +56,8 @@ class DummyDeployer:
 
 class TaskExecutorTestCase(unittest.TestCase):
     def setUp(self):
-        self.workspace_root = Path("runtime") / "workspaces-test-executor" / f"task_{uuid4().hex}"
+        self.workspace_root = Path(mkdtemp(prefix="task-executor-test-"))
         self.repo_path = self.workspace_root / "demo"
-        self.repo_path.mkdir(parents=True, exist_ok=True)
-        (self.repo_path / "Dockerfile").write_text("FROM python:3.13-slim\n", encoding="utf-8")
         self.task_request = {
             "intent": "deploy_project",
             "project": {

@@ -158,7 +158,13 @@ class LlmApiTestCase(unittest.TestCase):
                 "task": "deploy_project"
             },
         }
-        mock_create_record.return_value = {"id": 1, "status": "deployed"}
+        mock_create_record.return_value = {
+            "id": 1,
+            "status": "deployed",
+            "created_at": "2026-04-27T10:00:00",
+            "summary": "整体：deployed｜测试：passed｜部署：passed",
+            "deploy_result": {"status": "passed"},
+        }
 
         payload = {
             "intent": "deploy_project",
@@ -182,6 +188,9 @@ class LlmApiTestCase(unittest.TestCase):
         self.assertEqual(body["status"], "deployed")
         self.assertEqual(body["deploy_result"]["status"], "passed")
         self.assertEqual(body["history_record"]["id"], 1)
+        self.assertEqual(body["history_record"]["status"], "deployed")
+        self.assertEqual(body["history_record"]["summary"], "整体：deployed｜测试：passed｜部署：passed")
+        self.assertNotIn("deploy_result", body["history_record"])
 
     @patch("backend.routes.tasks.execute_task_pipeline")
     @patch("backend.routes.tasks.create_task_execution_record")
@@ -206,7 +215,13 @@ class LlmApiTestCase(unittest.TestCase):
                 "blocking_reason": "unit_tests_not_passed"
             },
         }
-        mock_create_record.return_value = {"id": 2, "status": "blocked"}
+        mock_create_record.return_value = {
+            "id": 2,
+            "status": "blocked",
+            "created_at": "2026-04-27T10:01:00",
+            "summary": "整体：blocked｜测试：failed｜部署：skipped",
+            "test_result": {"status": "failed"},
+        }
 
         payload = {
             "intent": "deploy_project",
@@ -230,6 +245,8 @@ class LlmApiTestCase(unittest.TestCase):
         self.assertEqual(body["status"], "blocked")
         self.assertEqual(body["dispatch_result"]["blocking_reason"], "unit_tests_not_passed")
         self.assertEqual(body["history_record"]["id"], 2)
+        self.assertEqual(body["history_record"]["status"], "blocked")
+        self.assertNotIn("test_result", body["history_record"])
 
     @patch("backend.routes.tasks.list_task_execution_records")
     def test_list_task_history(self, mock_list_records):
