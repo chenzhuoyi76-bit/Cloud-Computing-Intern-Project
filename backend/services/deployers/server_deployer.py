@@ -110,6 +110,17 @@ def _resolve_server_command(server_config: dict[str, Any], repo_path: Path) -> t
         resolved_script = repo_path / script_path
         if not resolved_script.exists():
             raise DeploymentError(f"Server deploy script not found: {script_path}")
+        script_suffix = resolved_script.suffix.lower()
+        if script_suffix == ".ps1":
+            return [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(resolved_script),
+            ], False
+        if script_suffix in {".cmd", ".bat"}:
+            return ["cmd", "/c", str(resolved_script)], False
         return str(resolved_script), True
 
     if start_command:
