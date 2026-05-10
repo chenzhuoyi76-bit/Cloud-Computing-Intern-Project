@@ -227,6 +227,44 @@ async function collectTaskPayload() {
 
   const normalizedContainerName = normalizeDockerName(rawContainerName || normalizedImageName);
 
+  const serverScriptPath = deployTarget.label === "server"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 server 部署脚本路径，可留空后改用启动命令",
+        placeHolder: "scripts/deploy.ps1",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (serverScriptPath === undefined) {
+    return null;
+  }
+
+  const serverStartCommand = deployTarget.label === "server"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 server 启动命令；如果上一步已填脚本路径，这里可以留空",
+        placeHolder: "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (serverStartCommand === undefined) {
+    return null;
+  }
+
+  if (deployTarget.label === "server" && !String(serverScriptPath).trim() && !String(serverStartCommand).trim()) {
+    vscode.window.showErrorMessage("Server 部署至少需要提供部署脚本路径或启动命令。");
+    return null;
+  }
+
+  const serverHealthcheckUrl = deployTarget.label === "server"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 server 健康检查 URL，可留空",
+        placeHolder: "http://127.0.0.1:8080/health",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (serverHealthcheckUrl === undefined) {
+    return null;
+  }
+
   if (deployTarget.label === "docker") {
     const notices = [];
     if ((rawImageName || inferImageName(repoUrl)) !== normalizedImageName) {
@@ -250,11 +288,11 @@ async function collectTaskPayload() {
     },
     execution: {
       install: {
-        enabled: projectType.label === "python" || projectType.label === "nodejs",
+        enabled: projectType.label === "python" || projectType.label === "nodejs" || projectType.label === "java",
         command: defaultInstallCommand(projectType.label),
       },
       test: {
-        enabled: projectType.label === "python" || projectType.label === "nodejs",
+        enabled: projectType.label === "python" || projectType.label === "nodejs" || projectType.label === "java",
         framework: defaultTestFramework(projectType.label),
         command: defaultTestCommand(projectType.label),
         timeout_seconds: 600,
@@ -270,6 +308,16 @@ async function collectTaskPayload() {
               container_name: normalizedContainerName,
               ports: [],
               env: {},
+            }
+          : null,
+        server: deployTarget.label === "server"
+          ? {
+              script_path: String(serverScriptPath || "").trim(),
+              start_command: String(serverStartCommand || "").trim(),
+              working_dir: ".",
+              healthcheck_url: String(serverHealthcheckUrl || "").trim(),
+              healthcheck_timeout_seconds: 60,
+              healthcheck_interval_seconds: 2,
             }
           : null,
       },
@@ -332,6 +380,12 @@ function formatExecutionResult(result) {
     if (result.deploy_result.image) {
       lines.push(`镜像：${result.deploy_result.image}`);
     }
+    if (result.deploy_result.deploy_command) {
+      lines.push(`部署命令：${result.deploy_result.deploy_command}`);
+    }
+    if (result.deploy_result.working_dir) {
+      lines.push(`工作目录：${result.deploy_result.working_dir}`);
+    }
     if (result.deploy_result.container_name) {
       lines.push(`容器名：${result.deploy_result.container_name}`);
     }
@@ -350,6 +404,9 @@ function formatExecutionResult(result) {
     lines.push(`耗时：${formatDuration(result.timings?.monitoring ?? result.monitoring_result.duration_seconds)}`);
     if (result.monitoring_result.container_status) {
       lines.push(`容器状态：${result.monitoring_result.container_status}`);
+    }
+    if (result.monitoring_result.healthcheck_url) {
+      lines.push(`健康检查：${result.monitoring_result.healthcheck_url}`);
     }
     if (typeof result.monitoring_result.running === "boolean") {
       lines.push(`是否运行中：${result.monitoring_result.running ? "是" : "否"}`);
@@ -437,6 +494,12 @@ function formatHistoryResult(record) {
     if (record.deploy_result.image) {
       lines.push(`镜像：${record.deploy_result.image}`);
     }
+    if (record.deploy_result.deploy_command) {
+      lines.push(`部署命令：${record.deploy_result.deploy_command}`);
+    }
+    if (record.deploy_result.working_dir) {
+      lines.push(`工作目录：${record.deploy_result.working_dir}`);
+    }
     if (record.deploy_result.container_name) {
       lines.push(`容器名：${record.deploy_result.container_name}`);
     }
@@ -455,6 +518,9 @@ function formatHistoryResult(record) {
     lines.push(`耗时：${formatDuration(record.timings?.monitoring ?? record.monitoring_result.duration_seconds)}`);
     if (record.monitoring_result.container_status) {
       lines.push(`容器状态：${record.monitoring_result.container_status}`);
+    }
+    if (record.monitoring_result.healthcheck_url) {
+      lines.push(`健康检查：${record.monitoring_result.healthcheck_url}`);
     }
     if (typeof record.monitoring_result.running === "boolean") {
       lines.push(`是否运行中：${record.monitoring_result.running ? "是" : "否"}`);

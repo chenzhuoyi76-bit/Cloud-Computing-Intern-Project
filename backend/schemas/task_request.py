@@ -115,8 +115,34 @@ def validate_task_request(payload: dict[str, Any] | None) -> dict[str, Any]:
             _require_non_empty_string(docker, "container_name", prefix="execution.deploy.docker")
             _validate_list(docker, "ports", prefix="execution.deploy.docker")
             _validate_object(docker, "env", prefix="execution.deploy.docker")
+            deploy.setdefault("server", None)
+        elif target == "server":
+            server = _require_object(deploy, "server", prefix="execution.deploy")
+            server.setdefault("script_path", "")
+            server.setdefault("start_command", "")
+            server.setdefault("working_dir", ".")
+            server.setdefault("healthcheck_url", "")
+            server.setdefault("healthcheck_timeout_seconds", 60)
+            server.setdefault("healthcheck_interval_seconds", 2)
+            script_path = str(server.get("script_path", "")).strip()
+            start_command = str(server.get("start_command", "")).strip()
+            if not script_path and not start_command:
+                raise TaskRequestValidationError(
+                    "execution.deploy.server must provide either script_path or start_command."
+                )
+            if script_path:
+                _require_non_empty_string(server, "script_path", prefix="execution.deploy.server")
+            if start_command:
+                _require_non_empty_string(server, "start_command", prefix="execution.deploy.server")
+            _require_non_empty_string(server, "working_dir", prefix="execution.deploy.server")
+            if str(server.get("healthcheck_url", "")).strip():
+                _require_non_empty_string(server, "healthcheck_url", prefix="execution.deploy.server")
+            _validate_positive_int(server, "healthcheck_timeout_seconds", prefix="execution.deploy.server")
+            _validate_positive_number(server, "healthcheck_interval_seconds", prefix="execution.deploy.server")
+            deploy.setdefault("docker", None)
         else:
             deploy.setdefault("docker", None)
+            deploy.setdefault("server", None)
 
     monitoring = _optional_object(execution, "monitoring", prefix="execution.monitoring")
     monitoring.setdefault("enabled", False)
@@ -174,6 +200,13 @@ def _validate_positive_int(container: dict[str, Any], key: str, prefix: str | No
     field = _field_name(key, prefix)
     if not isinstance(value, int) or value <= 0:
         raise TaskRequestValidationError(f"{field} must be a positive integer.")
+
+
+def _validate_positive_number(container: dict[str, Any], key: str, prefix: str | None = None) -> None:
+    value = container.get(key)
+    field = _field_name(key, prefix)
+    if not isinstance(value, (int, float)) or value <= 0:
+        raise TaskRequestValidationError(f"{field} must be a positive number.")
 
 
 def _validate_bool_fields(container: dict[str, Any], keys: list[str], prefix: str | None = None) -> None:

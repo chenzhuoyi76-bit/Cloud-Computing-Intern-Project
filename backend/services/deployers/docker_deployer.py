@@ -4,7 +4,7 @@ from time import perf_counter
 from pathlib import Path
 from typing import Any
 
-from backend.services.deployers.base import BaseDeployer, DeploymentError
+from backend.services.deployers.base import BaseDeployer, DeploymentError, run_command
 
 
 class DockerDeployer(BaseDeployer):
@@ -118,14 +118,8 @@ class DockerDeployer(BaseDeployer):
 
 def _run_command(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(
-            command,
-            cwd=str(cwd),
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError as exc:
+        return run_command(command, cwd=cwd)
+    except DeploymentError as exc:
         raise DeploymentError("docker is not installed or not available in PATH.") from exc
 
 

@@ -51,6 +51,31 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
         self.assertEqual(validated["execution"]["test"]["framework"], "npm")
         self.assertEqual(validated["execution"]["test"]["command"], "npm test")
 
+    def test_validate_server_deploy_request(self):
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "server",
+                    "server": {
+                        "script_path": "scripts/deploy.ps1",
+                        "healthcheck_url": "http://127.0.0.1:8080/health"
+                    }
+                }
+            }
+        }
+
+        validated = validate_task_request(payload)
+
+        self.assertEqual(validated["execution"]["deploy"]["server"]["script_path"], "scripts/deploy.ps1")
+        self.assertEqual(validated["execution"]["deploy"]["server"]["working_dir"], ".")
+        self.assertEqual(validated["execution"]["deploy"]["server"]["healthcheck_timeout_seconds"], 60)
+
     def test_validate_minimal_java_deploy_request(self):
         payload = {
             "intent": "deploy_project",
@@ -147,6 +172,25 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
                 "deploy": {
                     "enabled": True,
                     "target": "docker"
+                }
+            }
+        }
+
+        with self.assertRaises(TaskRequestValidationError):
+            validate_task_request(payload)
+
+    def test_reject_server_deploy_without_script_or_command(self):
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "server",
+                    "server": {}
                 }
             }
         }

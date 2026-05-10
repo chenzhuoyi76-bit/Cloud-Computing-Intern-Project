@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -30,3 +31,22 @@ class BaseDeployer:
         monitoring_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         raise NotImplementedError
+
+
+def run_command(
+    command: list[str] | str,
+    *,
+    cwd: Path,
+    shell: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            cwd=str(cwd),
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=shell,
+        )
+    except FileNotFoundError as exc:
+        raise DeploymentError("Required deployment command is not available in PATH.") from exc
