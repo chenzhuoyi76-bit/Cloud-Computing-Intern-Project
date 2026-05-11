@@ -76,6 +76,32 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
         self.assertEqual(validated["execution"]["deploy"]["server"]["working_dir"], ".")
         self.assertEqual(validated["execution"]["deploy"]["server"]["healthcheck_timeout_seconds"], 60)
 
+    def test_validate_azure_deploy_request(self):
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "azure",
+                    "azure": {
+                        "template_path": "infra/main.bicep",
+                        "resource_group": "demo-rg"
+                    }
+                }
+            }
+        }
+
+        validated = validate_task_request(payload)
+
+        self.assertEqual(validated["execution"]["deploy"]["azure"]["template_path"], "infra/main.bicep")
+        self.assertEqual(validated["execution"]["deploy"]["azure"]["resource_group"], "demo-rg")
+        self.assertEqual(validated["execution"]["deploy"]["azure"]["deployment_name"], "demo-deployment")
+        self.assertEqual(validated["execution"]["deploy"]["azure"]["healthcheck_timeout_seconds"], 120)
+
     def test_validate_minimal_java_deploy_request(self):
         payload = {
             "intent": "deploy_project",
@@ -191,6 +217,25 @@ class TaskRequestSchemaTestCase(unittest.TestCase):
                     "enabled": True,
                     "target": "server",
                     "server": {}
+                }
+            }
+        }
+
+        with self.assertRaises(TaskRequestValidationError):
+            validate_task_request(payload)
+
+    def test_reject_azure_deploy_without_template_or_command(self):
+        payload = {
+            "intent": "deploy_project",
+            "project": {
+                "repo_url": "https://github.com/example/demo.git",
+                "project_type": "python"
+            },
+            "execution": {
+                "deploy": {
+                    "enabled": True,
+                    "target": "azure",
+                    "azure": {}
                 }
             }
         }

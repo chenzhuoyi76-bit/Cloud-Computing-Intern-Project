@@ -12,7 +12,7 @@ SUPPORTED_INTENTS = {
     "summarize_monitoring",
 }
 SUPPORTED_PROJECT_TYPES = {"python", "nodejs", "java"}
-SUPPORTED_DEPLOY_TARGETS = {"docker", "server", "cloud"}
+SUPPORTED_DEPLOY_TARGETS = {"docker", "server", "azure"}
 
 
 class TaskRequestValidationError(Exception):
@@ -140,9 +140,47 @@ def validate_task_request(payload: dict[str, Any] | None) -> dict[str, Any]:
             _validate_positive_int(server, "healthcheck_timeout_seconds", prefix="execution.deploy.server")
             _validate_positive_number(server, "healthcheck_interval_seconds", prefix="execution.deploy.server")
             deploy.setdefault("docker", None)
+            deploy.setdefault("azure", None)
+        elif target == "azure":
+            azure = _require_object(deploy, "azure", prefix="execution.deploy")
+            azure.setdefault("command", "")
+            azure.setdefault("template_path", "")
+            azure.setdefault("parameters_file", "")
+            azure.setdefault("resource_group", "")
+            azure.setdefault("deployment_name", _default_azure_deployment_name(repo_url))
+            azure.setdefault("subscription_id", "")
+            azure.setdefault("working_dir", ".")
+            azure.setdefault("healthcheck_url", "")
+            azure.setdefault("healthcheck_timeout_seconds", 120)
+            azure.setdefault("healthcheck_interval_seconds", 5)
+
+            command = str(azure.get("command", "")).strip()
+            template_path = str(azure.get("template_path", "")).strip()
+            if not command and not template_path:
+                raise TaskRequestValidationError(
+                    "execution.deploy.azure must provide either command or template_path."
+                )
+            if template_path:
+                _require_non_empty_string(azure, "template_path", prefix="execution.deploy.azure")
+                _require_non_empty_string(azure, "resource_group", prefix="execution.deploy.azure")
+            if command:
+                _require_non_empty_string(azure, "command", prefix="execution.deploy.azure")
+            if str(azure.get("parameters_file", "")).strip():
+                _require_non_empty_string(azure, "parameters_file", prefix="execution.deploy.azure")
+            _require_non_empty_string(azure, "deployment_name", prefix="execution.deploy.azure")
+            _require_non_empty_string(azure, "working_dir", prefix="execution.deploy.azure")
+            if str(azure.get("healthcheck_url", "")).strip():
+                _require_non_empty_string(azure, "healthcheck_url", prefix="execution.deploy.azure")
+            if str(azure.get("subscription_id", "")).strip():
+                _require_non_empty_string(azure, "subscription_id", prefix="execution.deploy.azure")
+            _validate_positive_int(azure, "healthcheck_timeout_seconds", prefix="execution.deploy.azure")
+            _validate_positive_number(azure, "healthcheck_interval_seconds", prefix="execution.deploy.azure")
+            deploy.setdefault("docker", None)
+            deploy.setdefault("server", None)
         else:
             deploy.setdefault("docker", None)
             deploy.setdefault("server", None)
+            deploy.setdefault("azure", None)
 
     monitoring = _optional_object(execution, "monitoring", prefix="execution.monitoring")
     monitoring.setdefault("enabled", False)
@@ -270,6 +308,10 @@ def _repo_name_from_url(repo_url: str) -> str:
     if repo_name.endswith(".git"):
         repo_name = repo_name[:-4]
     return _normalize_docker_name(repo_name or "app")
+
+
+def _default_azure_deployment_name(repo_url: str) -> str:
+    return f"{_repo_name_from_url(repo_url)}-deployment"
 
 
 def _normalize_docker_name(value: str) -> str:

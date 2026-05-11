@@ -162,8 +162,8 @@ async function collectTaskPayload() {
   const projectType = await vscode.window.showQuickPick(
     [
       { label: "python", detail: "使用 Python 执行器和 pytest" },
-      { label: "nodejs", detail: "后续扩展" },
-      { label: "java", detail: "后续扩展" },
+      { label: "nodejs", detail: "使用 Node.js 执行器和 npm test" },
+      { label: "java", detail: "使用 Maven 测试命令" },
     ],
     {
       title: "选择项目类型",
@@ -186,9 +186,9 @@ async function collectTaskPayload() {
 
   const deployTarget = await vscode.window.showQuickPick(
     [
-      { label: "docker", detail: "当前已实现" },
-      { label: "server", detail: "后续扩展" },
-      { label: "cloud", detail: "后续扩展" },
+      { label: "docker", detail: "基于 Dockerfile 构建并运行容器" },
+      { label: "server", detail: "执行部署脚本或启动命令，并做健康检查" },
+      { label: "azure", detail: "使用 Azure CLI + Bicep/参数文件部署" },
     ],
     {
       title: "选择部署目标",
@@ -265,6 +265,94 @@ async function collectTaskPayload() {
     return null;
   }
 
+  const azureTemplatePath = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure 模板路径，若留空则改用自定义命令",
+        placeHolder: "infra/main.bicep",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureTemplatePath === undefined) {
+    return null;
+  }
+
+  const azureCommand = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure 自定义部署命令；如果上一步已填模板路径，这里可以留空",
+        placeHolder: "az deployment group create --resource-group my-rg --template-file infra/main.bicep",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureCommand === undefined) {
+    return null;
+  }
+
+  if (deployTarget.label === "azure" && !String(azureTemplatePath).trim() && !String(azureCommand).trim()) {
+    vscode.window.showErrorMessage("Azure 部署至少需要提供模板路径或自定义部署命令。");
+    return null;
+  }
+
+  const azureResourceGroup = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure Resource Group；使用模板部署时必填",
+        placeHolder: "my-resource-group",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureResourceGroup === undefined) {
+    return null;
+  }
+
+  if (deployTarget.label === "azure" && String(azureTemplatePath).trim() && !String(azureResourceGroup).trim()) {
+    vscode.window.showErrorMessage("使用 Azure 模板部署时，必须填写 Resource Group。");
+    return null;
+  }
+
+  const azureParametersFile = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure 参数文件路径，可留空",
+        placeHolder: "infra/main.parameters.json",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureParametersFile === undefined) {
+    return null;
+  }
+
+  const azureDeploymentName = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure deployment name",
+        placeHolder: `${inferImageName(repoUrl)}-deployment`,
+        value: `${inferImageName(repoUrl)}-deployment`,
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureDeploymentName === undefined) {
+    return null;
+  }
+
+  const azureSubscriptionId = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure subscription ID，可留空",
+        placeHolder: "00000000-0000-0000-0000-000000000000",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureSubscriptionId === undefined) {
+    return null;
+  }
+
+  const azureHealthcheckUrl = deployTarget.label === "azure"
+    ? await vscode.window.showInputBox({
+        prompt: "输入 Azure 部署后的健康检查 URL，可留空",
+        placeHolder: "https://your-app.azurewebsites.net/health",
+        ignoreFocusOut: true,
+      })
+    : "";
+  if (azureHealthcheckUrl === undefined) {
+    return null;
+  }
+
   if (deployTarget.label === "docker") {
     const notices = [];
     if ((rawImageName || inferImageName(repoUrl)) !== normalizedImageName) {
@@ -318,6 +406,20 @@ async function collectTaskPayload() {
               healthcheck_url: String(serverHealthcheckUrl || "").trim(),
               healthcheck_timeout_seconds: 60,
               healthcheck_interval_seconds: 2,
+            }
+          : null,
+        azure: deployTarget.label === "azure"
+          ? {
+              command: String(azureCommand || "").trim(),
+              template_path: String(azureTemplatePath || "").trim(),
+              parameters_file: String(azureParametersFile || "").trim(),
+              resource_group: String(azureResourceGroup || "").trim(),
+              deployment_name: String(azureDeploymentName || `${inferImageName(repoUrl)}-deployment`).trim(),
+              subscription_id: String(azureSubscriptionId || "").trim(),
+              working_dir: ".",
+              healthcheck_url: String(azureHealthcheckUrl || "").trim(),
+              healthcheck_timeout_seconds: 120,
+              healthcheck_interval_seconds: 5,
             }
           : null,
       },
@@ -382,6 +484,12 @@ function formatExecutionResult(result) {
     }
     if (result.deploy_result.deploy_command) {
       lines.push(`部署命令：${result.deploy_result.deploy_command}`);
+    }
+    if (result.deploy_result.deployment_name) {
+      lines.push(`Deployment Name：${result.deploy_result.deployment_name}`);
+    }
+    if (result.deploy_result.resource_group) {
+      lines.push(`Resource Group：${result.deploy_result.resource_group}`);
     }
     if (result.deploy_result.working_dir) {
       lines.push(`工作目录：${result.deploy_result.working_dir}`);
@@ -496,6 +604,12 @@ function formatHistoryResult(record) {
     }
     if (record.deploy_result.deploy_command) {
       lines.push(`部署命令：${record.deploy_result.deploy_command}`);
+    }
+    if (record.deploy_result.deployment_name) {
+      lines.push(`Deployment Name：${record.deploy_result.deployment_name}`);
+    }
+    if (record.deploy_result.resource_group) {
+      lines.push(`Resource Group：${record.deploy_result.resource_group}`);
     }
     if (record.deploy_result.working_dir) {
       lines.push(`工作目录：${record.deploy_result.working_dir}`);
