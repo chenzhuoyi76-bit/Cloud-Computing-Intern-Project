@@ -1,0 +1,37 @@
+{
+  "schema_version": "draft-1",
+  "implementation_status": "design_only_not_loaded",
+  "profile": "cloud-hosted",
+  "api": {
+    "bind": "127.0.0.1:5100",
+    "legacy_routes_enabled": false,
+    "authentication_required": true
+  },
+  "database": {
+    "url_env": "AGENT_DATABASE_URL"
+  },
+  "evidence": {
+    "root": "/var/lib/release-agent/evidence"
+  },
+  "cluster": {
+    "registry_id": "lab-cluster",
+    "allowed_namespaces": ["release-lab"],
+    "readonly_kubeconfig_path_env": "AGENT_READONLY_KUBECONFIG"
+  },
+  "diagnostics": {
+    "enabled": false,
+    "engine": "holmesgpt",
+    "model_id_env": "AGENT_MODEL_ID",
+    "model_base_url_env": "AGENT_MODEL_BASE_URL",
+    "model_api_key_env": "AGENT_MODEL_API_KEY",
+    "max_model_calls": 8,
+    "max_tool_calls": 20,
+    "max_duration_seconds": 300,
+    "max_concurrent_incidents": 1
+  },
+  "recovery": {
+    "enabled": false,
+    "allowed_actions": ["restore_verified_pod_template"],
+    "approval_required": true
+  }
+}
